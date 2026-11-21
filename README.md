@@ -5,7 +5,7 @@
 
 `fetch_exam.py` downloads exam question metadata, revealed answers (when available), and question PNG images from `fuflex.site` using an authenticated [Browserbase `browse` CLI](https://docs.browserbase.com/) remote browser session.
 
-It uses only the Python standard library (no `pip` packages needed) and supports configuration via **CLI flags**, **environment variables**, a **`.env` file**, or **interactive prompts**.
+It uses only the Python standard library (no `pip` packages needed) and supports configuration via **environment variables**, a **`.env` file**, or **interactive prompts**.
 
 ---
 
@@ -19,7 +19,7 @@ Verify your Python version:
 python3 --version
 ```
 
-`fetch_exam.py` uses only standard library modules (`argparse`, `base64`, `getpass`, `json`, `os`, `pathlib`, `subprocess`, `time`, `urllib.parse`), so no `pip install` or virtual environment is required.
+`fetch_exam.py` uses only standard library modules (`base64`, `getpass`, `json`, `os`, `pathlib`, `subprocess`, `time`, `urllib.parse`), so no `pip install` or virtual environment is required.
 
 ### 2. Node.js & npm
 
@@ -93,22 +93,23 @@ Before running the script, sign in to [https://www.fuflex.site](https://www.fufl
 
 `fetch_exam.py` resolves values in the following priority order (highest to lowest):
 
-1. **CLI flags** (`--exam-id`, `--subject`)
-2. **Shell environment variables**
-3. **`.env` file** (`./.env` by default, falling back to `.env` next to `fetch_exam.py`, or a custom path via `--env-file`)
-4. **Interactive prompts** (sensitive values are masked with `getpass`)
+1. **Shell environment variables**
+2. **`.env` file** (`./.env` by default, falling back to `.env` next to `fetch_exam.py`)
+3. **Interactive prompts** (sensitive values are masked with `getpass`)
 
 ### Supported Environment Variables
 
-| Variable | Description | Required |
+| Variable | Description | Default / Required |
 | --- | --- | --- |
-| `BROWSERBASE_API_KEY` | Browserbase API key used by `browse --remote` | Yes (for `browse`) |
-| `FUFLEX_EXAM_ID` | Numeric exam ID (e.g. `3671`) | Yes (or `--exam-id`) |
-| `FUFLEX_SUBJECT` | Subject code (e.g. `APO201C`) | Yes (or `--subject`) |
-| `FUFLEX_TOKEN` | `fuflex_token` from `localStorage` | Yes |
-| `FUFLEX_VISITOR_ID` | `fuflex_visitor_id` from `localStorage` | Yes |
-| `FUFLEX_FX_TRUST` | `fx_trust` cookie | Yes |
-| `FUFLEX_FX_DID` | `fx_did` cookie | Yes |
+| `BROWSERBASE_API_KEY` | Browserbase API key used by `browse --remote` | Required (for `browse`) |
+| `FUFLEX_EXAM_ID` | Numeric exam ID (e.g. `3671`) | Required |
+| `FUFLEX_SUBJECT` | Subject code (e.g. `APO201C`) | Required |
+| `FUFLEX_OUTPUT_DIR` | Directory where JSON, Markdown, and `images/` are written | `.` (optional) |
+| `FUFLEX_SESSION` | Named `browse` session to isolate browser state | `fuflex` (optional) |
+| `FUFLEX_TOKEN` | `fuflex_token` from `localStorage` | Required |
+| `FUFLEX_VISITOR_ID` | `fuflex_visitor_id` from `localStorage` | Required |
+| `FUFLEX_FX_TRUST` | `fx_trust` cookie | Required |
+| `FUFLEX_FX_DID` | `fx_did` cookie | Required |
 | `FUFLEX_FX_AUTH` | `fx_auth` cookie (defaults to `fuflex_token` if left blank at prompt) | Optional if prompting |
 
 ### Option A: Using a `.env` File (Recommended)
@@ -122,16 +123,18 @@ cp .env.example .env
 Or create `.env` manually in the project directory:
 
 ```env
-BROWSERBASE_API_KEY="bb_live_..."
+BROWSERBASE_API_KEY=bb_live_...
 
 FUFLEX_EXAM_ID=3671
 FUFLEX_SUBJECT=APO201C
+FUFLEX_OUTPUT_DIR=./output
+FUFLEX_SESSION=fuflex
 
-FUFLEX_TOKEN="eyJhbGciOi..."
-FUFLEX_VISITOR_ID="your_visitor_id"
-FUFLEX_FX_TRUST="your_fx_trust_cookie"
-FUFLEX_FX_DID="your_fx_did_cookie"
-FUFLEX_FX_AUTH="eyJhbGciOi..."
+FUFLEX_TOKEN=eyJhbGciOi...
+FUFLEX_VISITOR_ID=your_visitor_id
+FUFLEX_FX_TRUST=your_fx_trust_cookie
+FUFLEX_FX_DID=your_fx_did_cookie
+FUFLEX_FX_AUTH=eyJhbGciOi...
 ```
 
 > If you put `BROWSERBASE_API_KEY` inside `.env`, `fetch_exam.py` loads it into `os.environ` before spawning `browse`, so `browse` will automatically inherit it.
@@ -148,6 +151,7 @@ echo ".env" >> .gitignore
 export BROWSERBASE_API_KEY="bb_live_..."
 export FUFLEX_EXAM_ID="3671"
 export FUFLEX_SUBJECT="APO201C"
+export FUFLEX_OUTPUT_DIR="./output"
 export FUFLEX_TOKEN="..."
 export FUFLEX_VISITOR_ID="..."
 export FUFLEX_FX_TRUST="..."
@@ -163,39 +167,15 @@ Simply run the script without setting environment variables or `.env`, and it wi
 
 ## Usage
 
-### Basic Run (using `.env` or interactive prompts)
-
 ```bash
 python3 fetch_exam.py
 ```
 
-### Override Exam ID / Subject via CLI Flags
+To override any value from `.env` for a single run, pass it as an inline environment variable:
 
 ```bash
-python3 fetch_exam.py --exam-id 3671 --subject APO201C
+FUFLEX_EXAM_ID=3671 FUFLEX_SUBJECT=APO201C FUFLEX_OUTPUT_DIR=./exam_3671 python3 fetch_exam.py
 ```
-
-### Save to a Specific Output Directory
-
-```bash
-python3 fetch_exam.py --exam-id 3671 --subject APO201C --output-dir ./exam_3671
-```
-
-### Use a Custom `.env` File or `browse` Session Name
-
-```bash
-python3 fetch_exam.py --env-file ~/.fuflex.env --session fuflex-exam-3671
-```
-
-### All CLI Options
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--exam-id` | *(from env / prompt)* | Exam ID (e.g. `3671`) |
-| `--subject` | *(from env / prompt)* | Subject code (e.g. `APO201C`) |
-| `--output-dir` | `.` | Directory where JSON, Markdown, and `images/` are written |
-| `--session` | `fuflex` | Named `browse` session to isolate browser state |
-| `--env-file` | `./.env` | Path to a `.env` file |
 
 ---
 
@@ -214,24 +194,27 @@ Run with a `.env` file (saving outputs to `./output` on your host):
 ```bash
 docker run --rm -it \
   --env-file .env \
+  -e FUFLEX_OUTPUT_DIR=/output \
   -v "$(pwd)/output:/output" \
   fuflex-fetcher
 ```
 
-Or pass flags and environment variables directly (any missing values will be prompted interactively):
+Or pass environment variables directly (any missing values will be prompted interactively):
 
 ```bash
 docker run --rm -it \
   -e BROWSERBASE_API_KEY="bb_live_..." \
+  -e FUFLEX_EXAM_ID="3671" \
+  -e FUFLEX_SUBJECT="APO201C" \
   -v "$(pwd)/output:/output" \
-  fuflex-fetcher --exam-id 3671 --subject APO201C --output-dir /output
+  fuflex-fetcher
 ```
 
 ---
 
 ## Output Files
 
-Running the script for exam `3671` writes the following into `--output-dir`:
+Running the script for exam `3671` writes the following into `FUFLEX_OUTPUT_DIR` (defaults to `.`):
 
 ```text
 .

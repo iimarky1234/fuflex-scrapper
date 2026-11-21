@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Fetch FUFLEX exam questions and images using an authenticated `browse` session."""
 
-import argparse
 import base64
 import getpass
 import json
@@ -35,14 +34,11 @@ def load_dotenv(env_path: Path) -> None:
 
 def resolve_value(
     label: str,
-    cli_value: str | None = None,
     env_var: str | None = None,
     default: str | None = None,
     secret: bool = False,
 ) -> str:
-    """Resolve a value from CLI args, environment variables, or an interactive prompt."""
-    if cli_value and cli_value.strip():
-        return cli_value.strip()
+    """Resolve a value from environment variables or an interactive prompt."""
     if env_var:
         env_val = os.environ.get(env_var, "").strip()
         if env_val:
@@ -181,28 +177,16 @@ def write_markdown(questions: list[dict], exam_id: str, subject: str, out_path: 
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Fetch FUFLEX exam questions and images via `browse`."
-    )
-    parser.add_argument("--exam-id", help="Exam ID (e.g. 3671)")
-    parser.add_argument("--subject", help="Subject code (e.g. APO201C)")
-    parser.add_argument("--output-dir", default=".", help="Directory to save outputs")
-    parser.add_argument("--session", default="fuflex", help="browse session name")
-    parser.add_argument("--env-file", help="Path to .env file (defaults to ./.env)")
-    return parser.parse_args()
-
-
 def main() -> None:
-    args = parse_args()
-    env_path = Path(args.env_file) if args.env_file else Path(".env")
-    if not env_path.is_file() and not args.env_file:
+    env_path = Path(".env")
+    if not env_path.is_file():
         script_env = Path(__file__).resolve().parent / ".env"
         if script_env.is_file():
             env_path = script_env
     load_dotenv(env_path)
-    exam_id = resolve_value("Exam ID (e.g. 3671)", cli_value=args.exam_id, env_var="FUFLEX_EXAM_ID")
-    subject = resolve_value("Subject code (e.g. APO201C)", cli_value=args.subject, env_var="FUFLEX_SUBJECT")
+
+    exam_id = resolve_value("Exam ID (e.g. 3671)", env_var="FUFLEX_EXAM_ID")
+    subject = resolve_value("Subject code (e.g. APO201C)", env_var="FUFLEX_SUBJECT")
 
     auth_envs = ("FUFLEX_TOKEN", "FUFLEX_VISITOR_ID", "FUFLEX_FX_TRUST", "FUFLEX_FX_DID")
     if any(not os.environ.get(k, "").strip() for k in auth_envs):
@@ -219,28 +203,31 @@ def main() -> None:
         secret=True,
     )
 
-    out_dir = Path(args.output_dir).resolve()
+    output_dir = os.environ.get("FUFLEX_OUTPUT_DIR", ".").strip() or "."
+    session = os.environ.get("FUFLEX_SESSION", "fuflex").strip() or "fuflex"
+
+    out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     url = f"https://www.fuflex.site/exams/{exam_id}/images?subject={quote(subject)}"
 
-    print(f"\nOpening remote browser session '{args.session}'...")
-    run_browse(["open", url, "--session", args.session, "--remote"])
+    print(f"\nOpening remote browser session '{session}'...")
+    run_browse(["open", url, "--session", session, "--remote"])
     try:
-        eval_js(args.session, build_auth_js(fuflex_token, visitor_id, fx_trust, fx_did, fx_auth))
-        run_browse(["reload", "--session", args.session])
+        eval_js(session, build_auth_js(fuflex_token, visitor_id, fx_trust, fx_did, fx_auth))
+        run_browse(["reload", "--session", session])
         time.sleep(2)
 
-        questions = fetch_questions(args.session, exam_id)
+        questions = fetch_questions(session, exam_id)
         json_path = out_dir / f"exam_{exam_id}_questions.json"
         md_path = out_dir / f"exam_{exam_id}_questions.md"
         json_path.write_text(json.dumps(questions, indent=2, ensure_ascii=False), encoding="utf-8")
         write_markdown(questions, exam_id, subject, md_path)
         print(f"Saved {len(questions)} questions to {json_path} and {md_path}")
 
-        download_missing_images(args.session, questions, out_dir / "images")
+        download_missing_images(session, questions, out_dir / "images")
     finally:
-        print(f"Stopping browser session '{args.session}'...")
-        subprocess.run(["browse", "stop", "--session", args.session], check=False)
+        print(f"Stopping browser session '{session}'...")
+        subprocess.run(["browse", "stop", "--session", session], check=False)
 
 
 if __name__ == "__main__":

@@ -13,5 +13,6 @@ COPY fetch_exam.py /app/fetch_exam.py
 RUN chmod +x /app/fetch_exam.py \
     && mkdir -p /output
 
+ENV FUFLEX_OUTPUT_DIR=/output
+
 ENTRYPOINT ["python3", "/app/fetch_exam.py"]
-CMD ["--output-dir", "/output"]
