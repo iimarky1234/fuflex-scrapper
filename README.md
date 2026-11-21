@@ -1,197 +1,67 @@
-# FUFLEX Exam Fetcher (`fetch_exam.py`)
+# FUFLEX Exam Fetcher
 
 > [!WARNING]
-> **Use at your own risk.** Automated access to `fuflex.site` may violate the site's terms of service and could result in rate-limiting, IP blocks, or account suspension. You are solely responsible for how you use this script and for keeping your session tokens and API keys secure.
+> **Use at your own risk.** Automated access to `fuflex.site` may violate the site's terms of service and result in rate-limiting, IP blocks, or account suspension. You are solely responsible for how you use this tool and for safeguarding your credentials.
 
-`fetch_exam.py` downloads exam question metadata, revealed answers (when available), and question PNG images from `fuflex.site` using an authenticated [Browserbase `browse` CLI](https://docs.browserbase.com/) remote browser session.
+A Python utility (`fetch_exam.py`) that exports exam metadata, revealed answers, and question images from `fuflex.site` using an authenticated [Browserbase `browse` CLI](https://docs.browserbase.com/) session. Uses the Python standard library only.
 
-It uses only the Python standard library (no `pip` packages needed) and supports configuration via **environment variables**, a **`.env` file**, or **interactive prompts**.
+## Requirements
 
----
+- **Python 3.10+** (no third-party Python packages required)
+- **Node.js & npm**
+- **Browserbase `browse` CLI** and a **Browserbase API key** (`https://www.browserbase.com/settings`)
 
-## Prerequisites & Dependency Setup
-
-### 1. Python 3.10+
-
-Verify your Python version:
-
-```bash
-python3 --version
-```
-
-`fetch_exam.py` uses only standard library modules (`base64`, `getpass`, `json`, `os`, `pathlib`, `subprocess`, `time`, `urllib.parse`), so no `pip install` or virtual environment is required.
-
-### 2. Node.js & npm
-
-The `browse` CLI is distributed via npm and requires Node.js. Check if Node.js and npm are installed:
-
-```bash
-node --version
-npm --version
-```
-
-If not installed, install Node.js from [https://nodejs.org](https://nodejs.org) (or via your system package manager / `nvm`).
-
-### 3. Browserbase `browse` CLI
-
-Install the `browse` CLI globally:
+### Setup
 
 ```bash
 npm install -g browse
-```
-
-Verify installation:
-
-```bash
-which browse
-browse --help
-```
-
-### 4. Browserbase API Key
-
-Because `fetch_exam.py` runs `browse open ... --remote`, you need a Browserbase API key:
-
-1. Create or sign in to an account at [https://www.browserbase.com](https://www.browserbase.com).
-2. Copy your API key from **Settings → API Keys** (`https://www.browserbase.com/settings`).
-3. Export `BROWSERBASE_API_KEY` in your shell (or add it to your `.env` file):
-
-```bash
 export BROWSERBASE_API_KEY="bb_live_..."
-```
-
-4. Verify your setup with `browse doctor`:
-
-```bash
 browse doctor
 ```
 
-You should see `runtime`, `browserbase`, and `target` (`remote`) all report `ok`.
+## Configuration
 
----
+Values are resolved in order: **shell environment variables → `.env` file → interactive prompts**.
 
-## Getting Your FUFLEX Session Values
-
-Before running the script, sign in to [https://www.fuflex.site](https://www.fuflex.site) in your browser and open **DevTools** (`F12` or `Ctrl+Shift+I` / `Cmd+Option+I`):
-
-1. **Local Storage** (`Application` → `Storage` → `Local Storage` → `https://www.fuflex.site`):
-   - `fuflex_token`
-   - `fuflex_visitor_id`
-2. **Cookies** (`Application` → `Storage` → `Cookies` → `https://www.fuflex.site`):
-   - `fx_trust`
-   - `fx_did`
-   - `fx_auth` (usually the same JWT as `fuflex_token`)
-3. **Exam ID & Subject Code** from the exam URL:
-   - Example URL: `https://www.fuflex.site/exams/3671/images?subject=APO201C`
-   - Exam ID: `3671`
-   - Subject code: `APO201C`
-
-> **Security note:** Treat your tokens, cookies, and `BROWSERBASE_API_KEY` as secrets. Do not share them or commit `.env` to version control.
-
----
-
-## Configuration & Precedence
-
-`fetch_exam.py` resolves values in the following priority order (highest to lowest):
-
-1. **Shell environment variables**
-2. **`.env` file** (`./.env` by default, falling back to `.env` next to `fetch_exam.py`)
-3. **Interactive prompts** (sensitive values are masked with `getpass`)
-
-### Supported Environment Variables
-
-| Variable | Description | Default / Required |
-| --- | --- | --- |
-| `BROWSERBASE_API_KEY` | Browserbase API key used by `browse --remote` | Required (for `browse`) |
-| `FUFLEX_EXAM_ID` | Numeric exam ID (e.g. `3671`) | Required |
-| `FUFLEX_SUBJECT` | Subject code (e.g. `APO201C`) | Required |
-| `FUFLEX_OUTPUT_DIR` | Directory where JSON, Markdown, and `images/` are written | `.` (optional) |
-| `FUFLEX_SESSION` | Named `browse` session to isolate browser state | `fuflex` (optional) |
-| `FUFLEX_TOKEN` | `fuflex_token` from `localStorage` | Required |
-| `FUFLEX_VISITOR_ID` | `fuflex_visitor_id` from `localStorage` | Required |
-| `FUFLEX_FX_TRUST` | `fx_trust` cookie | Required |
-| `FUFLEX_FX_DID` | `fx_did` cookie | Required |
-| `FUFLEX_FX_AUTH` | `fx_auth` cookie (defaults to `fuflex_token` if left blank at prompt) | Optional if prompting |
-
-### Option A: Using a `.env` File (Recommended)
-
-Copy `.env.example` to `.env` and fill in your values:
+Copy the template and fill in your credentials:
 
 ```bash
 cp .env.example .env
 ```
 
-Or create `.env` manually in the project directory:
+| Variable | Description | Default |
+| --- | --- | --- |
+| `BROWSERBASE_API_KEY` | Browserbase API key for `browse --remote` | *Required* |
+| `FUFLEX_EXAM_ID` | Exam ID from the exam URL (e.g. `3671`) | *Required* |
+| `FUFLEX_SUBJECT` | Subject code from the exam URL (e.g. `APO201C`) | *Required* |
+| `FUFLEX_TOKEN` | `fuflex_token` from `localStorage` | *Required* |
+| `FUFLEX_VISITOR_ID` | `fuflex_visitor_id` from `localStorage` | *Required* |
+| `FUFLEX_FX_TRUST` | `fx_trust` cookie | *Required* |
+| `FUFLEX_FX_DID` | `fx_did` cookie | *Required* |
+| `FUFLEX_FX_AUTH` | `fx_auth` cookie (reuses `FUFLEX_TOKEN` if left blank at prompt) | *Optional* |
+| `FUFLEX_OUTPUT_DIR` | Output directory for exported files | `.` |
+| `FUFLEX_SESSION` | Named `browse` session | `fuflex` |
 
-```env
-BROWSERBASE_API_KEY=bb_live_...
-
-FUFLEX_EXAM_ID=3671
-FUFLEX_SUBJECT=APO201C
-FUFLEX_OUTPUT_DIR=./output
-FUFLEX_SESSION=fuflex
-
-FUFLEX_TOKEN=eyJhbGciOi...
-FUFLEX_VISITOR_ID=your_visitor_id
-FUFLEX_FX_TRUST=your_fx_trust_cookie
-FUFLEX_FX_DID=your_fx_did_cookie
-FUFLEX_FX_AUTH=eyJhbGciOi...
-```
-
-> If you put `BROWSERBASE_API_KEY` inside `.env`, `fetch_exam.py` loads it into `os.environ` before spawning `browse`, so `browse` will automatically inherit it.
-
-If you use Git, make sure `.env` is ignored:
-
-```bash
-echo ".env" >> .gitignore
-```
-
-### Option B: Shell Environment Variables
-
-```bash
-export BROWSERBASE_API_KEY="bb_live_..."
-export FUFLEX_EXAM_ID="3671"
-export FUFLEX_SUBJECT="APO201C"
-export FUFLEX_OUTPUT_DIR="./output"
-export FUFLEX_TOKEN="..."
-export FUFLEX_VISITOR_ID="..."
-export FUFLEX_FX_TRUST="..."
-export FUFLEX_FX_DID="..."
-export FUFLEX_FX_AUTH="..."
-```
-
-### Option C: Interactive Prompts
-
-Simply run the script without setting environment variables or `.env`, and it will prompt you for each missing value (with hidden input for tokens and cookies).
-
----
+To obtain your FUFLEX session values, sign in to `fuflex.site`, open browser DevTools (**Application → Local Storage** and **Application → Cookies**), and copy the corresponding entries. Keep `.env` out of version control.
 
 ## Usage
+
+### Local
 
 ```bash
 python3 fetch_exam.py
 ```
 
-To override any value from `.env` for a single run, pass it as an inline environment variable:
+Override values for a single run via inline environment variables:
 
 ```bash
 FUFLEX_EXAM_ID=3671 FUFLEX_SUBJECT=APO201C FUFLEX_OUTPUT_DIR=./exam_3671 python3 fetch_exam.py
 ```
 
----
-
-## Running with Docker
-
-If you prefer not to install Node.js, Python, or `browse` locally, you can run `fetch_exam.py` using the included `Dockerfile`.
-
-Build the image:
+### Docker
 
 ```bash
 docker build -t fuflex-fetcher .
-```
-
-Run with a `.env` file (saving outputs to `./output` on your host):
-
-```bash
 docker run --rm -it \
   --env-file .env \
   -e FUFLEX_OUTPUT_DIR=/output \
@@ -199,54 +69,28 @@ docker run --rm -it \
   fuflex-fetcher
 ```
 
-Or pass environment variables directly (any missing values will be prompted interactively):
+## Output
 
-```bash
-docker run --rm -it \
-  -e BROWSERBASE_API_KEY="bb_live_..." \
-  -e FUFLEX_EXAM_ID="3671" \
-  -e FUFLEX_SUBJECT="APO201C" \
-  -v "$(pwd)/output:/output" \
-  fuflex-fetcher
-```
-
----
-
-## Output Files
-
-Running the script for exam `3671` writes the following into `FUFLEX_OUTPUT_DIR` (defaults to `.`):
+Files are written to `FUFLEX_OUTPUT_DIR`:
 
 ```text
-.
-├── exam_3671_questions.json   # Raw API JSON from /api/exams/3671/questions?revealAnswers=true
-├── exam_3671_questions.md     # Markdown summary of question prompts, answers, and image links
+<FUFLEX_OUTPUT_DIR>/
+├── exam_<ID>_questions.json   # Raw API response
+├── exam_<ID>_questions.md     # Questions, answers, and image links
 └── images/
     ├── Q01.png
-    ├── Q02.png
     └── ...
 ```
 
-- **Resumable downloads:** Images that already exist in `images/` (`Q01.png`, `Q02.png`, ...) are skipped automatically on re-runs.
-- **Automatic cleanup:** The script always runs `browse stop --session <session>` in a `finally` block so the remote Browserbase session is closed even if an error occurs.
-
----
+Existing images in `images/` are skipped on re-runs, and the remote `browse` session is always stopped on exit.
 
 ## Troubleshooting
 
-- **`browse: command not found`**
-  Make sure npm's global bin directory is on your `PATH`, or reinstall with `npm install -g browse`.
-- **`401 Unauthorized` or Browserbase session fails to start**
-  Verify `BROWSERBASE_API_KEY` is valid and run `browse doctor --json` for diagnostics.
-- **Empty questions list or auth error**
-  Your `fuflex_token`, `fx_auth`, or `fx_trust` may have expired (or your session may have been logged out on another device). Sign in again in your browser and refresh the values in `.env`.
-- **Stale `browse` daemon / session**
-  Force-stop the session and retry:
-  ```bash
-  browse stop --force --session fuflex
-  ```
-
----
+- **`browse: command not found`**: Ensure npm's global `bin` directory is in `PATH`, or run `npm install -g browse`.
+- **Browserbase session errors (`401` / startup failure)**: Verify `BROWSERBASE_API_KEY` and run `browse doctor --json`.
+- **Empty results or auth errors**: Refresh your FUFLEX cookies/token in `.env` after signing in again.
+- **Stale session**: Run `browse stop --force --session fuflex`.
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
+Licensed under the [Apache License 2.0](LICENSE).
